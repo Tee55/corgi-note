@@ -31,7 +31,8 @@ export function awsStore(): Store {
           new QueryCommand({
             TableName,
             ConsistentRead: true,
-            KeyConditionExpression: "owner = :o",
+            KeyConditionExpression: "#owner = :o",
+            ExpressionAttributeNames: { "#owner": "owner" },
             ExpressionAttributeValues: { ":o": owner },
             ExclusiveStartKey: cursor,
           }),

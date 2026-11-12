@@ -22,6 +22,9 @@ export function createApp(
   app.use("*", secureHeaders());
   app.use("/api/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
+    // Browser preflights have no access token. API Gateway supplies the CORS
+    // headers; answer its unauthenticated OPTIONS route before checking claims.
+    if (c.req.method === "OPTIONS") return c.body(null, 204);
     if (cloud) {
       const claims = c.env?.event?.requestContext?.authorizer?.jwt?.claims;
       if (!claims?.sub || claims.token_use !== "access")
@@ -199,7 +202,22 @@ export function createApp(
         409,
       );
     if (e instanceof HTTPException) return e.getResponse();
-    console.error(JSON.stringify({ event: "request-failed", name: e.name }));
+    const metadata = (
+      e as Error & {
+        $metadata?: { requestId?: string; httpStatusCode?: number };
+      }
+    ).$metadata;
+    console.error(
+      JSON.stringify({
+        event: "request-failed",
+        name: e.name,
+        message: e.message.slice(0, 1000),
+        method: c.req.method,
+        path: c.req.path,
+        awsRequestId: metadata?.requestId,
+        awsStatusCode: metadata?.httpStatusCode,
+      }),
+    );
     return c.json(
       {
         error:

@@ -1,6 +1,12 @@
 export type Config =
   | { mode: "local" }
-  | { mode: "aws"; clientId: string; domain: string; redirectUri: string };
+  | {
+      mode: "aws";
+      clientId: string;
+      domain: string;
+      redirectUri: string;
+      apiBaseUrl?: string;
+    };
 let config: Config;
 export async function loadConfig() {
   const r = await fetch("/config.json", { cache: "no-store" });
@@ -15,7 +21,8 @@ export async function loadConfig() {
       c.mode === "aws" &&
       c.clientId &&
       /^https:\/\//.test(c.domain) &&
-      /^https:\/\//.test(c.redirectUri)
+      /^https:\/\//.test(c.redirectUri) &&
+      (c.apiBaseUrl === undefined || isApiOrigin(c.apiBaseUrl))
     )
   )
     throw new Error(
@@ -23,6 +30,22 @@ export async function loadConfig() {
     );
   config = c;
   return config;
+}
+function isApiOrigin(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      (url.pathname === "/" || url.pathname === "")
+    );
+  } catch {
+    return false;
+  }
 }
 const b64 = (bytes: Uint8Array) =>
   btoa(String.fromCharCode(...bytes))
@@ -126,7 +149,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       );
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(`/api${path}`, { ...init, headers });
+  const baseUrl =
+    config.mode === "aws" ? (config.apiBaseUrl ?? "").replace(/\/$/, "") : "";
+  const response = await fetch(`${baseUrl}/api${path}`, { ...init, headers });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(

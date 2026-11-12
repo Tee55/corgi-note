@@ -224,3 +224,35 @@ test("cloud fails closed without verified access-token claims and isolates owner
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("cloud accepts preflights without a token while protecting journal requests", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "corgi-"));
+  const store = await localStore(root);
+  const app = createApp(store, true, "https://journal.example");
+  try {
+    for (const [method, resource] of [
+      ["GET", "/api/entries"],
+      ["PUT", `/api/entries/${randomUUID()}`],
+      ["DELETE", `/api/entries/${randomUUID()}`],
+      ["POST", "/api/photos"],
+    ]) {
+      const response = await app.request(resource, {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://journal.example",
+          "Access-Control-Request-Method": method,
+          "Access-Control-Request-Headers": "authorization,content-type",
+        },
+      });
+      assert.equal(response.status, 204);
+      assert.equal(await response.text(), "");
+      assert.equal(response.headers.get("Cache-Control"), "no-store");
+      // The actual request still needs verified API Gateway claims.
+      assert.equal((await app.request(resource, { method })).status, 401);
+    }
+    assert.deepEqual(await store.list("demo"), []);
+  } finally {
+    store.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
