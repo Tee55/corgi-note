@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.local/
+.aws-sam/
+playwright-report/
+test-results/
+.env*
+!.env.example
+
+# Project reports, references and their tooling stay local.
+/docs/
+/*.pdf
+/*.docx
+/*.md
